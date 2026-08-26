@@ -1,12 +1,10 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import plotly.express as px
-from pathlib import Path
+import matplotlib.pyplot as plt
 
-# ============================================================
+# =========================================================
 # PAGE CONFIGURATION
-# ============================================================
+# =========================================================
 
 st.set_page_config(
     page_title="Bird Species Observation Analysis",
@@ -14,131 +12,62 @@ st.set_page_config(
     layout="wide"
 )
 
-
-# ============================================================
-# LOAD DATA
-# ============================================================
-
-@st.cache_data
-def load_data():
-    df = pd.read_csv("Bird_Monitoring_Cleaned.csv")
-
-@st.cache_data
-def load_data():
-    file_path = Path(__file__).parent / "Bird_Monitoring_Cleaned.csv"
-
-    if not file_path.exists():
-        st.error(f"CSV file not found: {file_path}")
-        st.stop()
-
-    df = pd.read_csv(file_path)
-
-    # Convert numeric columns
-    numeric_columns = [
-        "Year",
-        "Temperature",
-        "Humidity",
-        "Initial_Three_Min_Cnt"
-    ]
-
-    for column in numeric_columns:
-        if column in df.columns:
-            df[column] = pd.to_numeric(
-                df[column],
-                errors="coerce"
-            )
-
-    # Convert date
-    if "Date" in df.columns:
-        df["Date"] = pd.to_datetime(
-            df["Date"],
-            errors="coerce"
-        )
-
-        df["Month"] = df["Date"].dt.month
-        df["Month_Name"] = df["Date"].dt.month_name()
-
-    # Create season
-    if "Month" in df.columns:
-
-       def get_season(month):
-            if month in [12, 1, 2]:
-                return "Winter"
-            elif month in [3, 4, 5]:
-                return "Spring"
-            elif month in [6, 7, 8]:
-                return "Summer"
-            else:
-                return "Autumn"
-
-        df["Season"] = df["Month"].apply(get_season)
-
-    return df
-df = load_data()
-
-
-# ============================================================
-# TITLE
-# ============================================================
-
-st.title("🐦 Bird Species Observation Analysis")
+st.title("🐦 Bird Species Observation Analysis Dashboard")
 
 st.markdown(
-    "### Explore bird observations, species diversity, habitats, "
-    "environmental conditions and conservation status."
+    "Analyze bird observations, species diversity, locations, "
+    "environmental conditions and observation trends."
 )
 
-st.divider()
+# =========================================================
+# LOAD DATASET
+# =========================================================
 
+df = pd.read_csv("bird_species.csv")
 
-# ============================================================
-# SIDEBAR FILTERS
-# ============================================================
+# Remove extra spaces from column names
+df.columns = df.columns.str.strip()
 
-st.sidebar.header("🔎 Filters")
+# =========================================================
+# DATA CLEANING
+# =========================================================
 
+# Convert Date
+if "Date" in df.columns:
+    df["Date"] = pd.to_datetime(
+        df["Date"],
+        errors="coerce"
+    )
 
-# Year filter
+# Convert Year
 if "Year" in df.columns:
-
-    years = sorted(
-        df["Year"].dropna().unique()
+    df["Year"] = pd.to_numeric(
+        df["Year"],
+        errors="coerce"
     )
 
-    selected_years = st.sidebar.multiselect(
-        "Select Year",
-        options=years,
-        default=years
-    )
+# Convert bird count
+if "Initial_Three_Min_Cnt" in df.columns:
+    df["Initial_Three_Min_Cnt"] = pd.to_numeric(
+        df["Initial_Three_Min_Cnt"],
+        errors="coerce"
+    ).fillna(0)
 
-else:
-    selected_years = []
+# =========================================================
+# SIDEBAR FILTERS
+# =========================================================
 
+st.sidebar.header("🔎 Dashboard Filters")
 
-# Habitat filter
-if "Location_Type" in df.columns:
+filtered_df = df.copy()
 
-    habitats = sorted(
-        df["Location_Type"]
-        .dropna()
-        .astype(str)
-        .unique()
-    )
+# ---------------------------------------------------------
+# Species Filter
+# ---------------------------------------------------------
 
-    selected_habitats = st.sidebar.multiselect(
-        "Select Habitat",
-        options=habitats,
-        default=habitats
-    )
-
-else:
-    selected_habitats = []
-
-
-# Species filter
 if "Common_Name" in df.columns:
 
-    species = sorted(
+    species_list = sorted(
         df["Common_Name"]
         .dropna()
         .astype(str)
@@ -146,463 +75,476 @@ if "Common_Name" in df.columns:
     )
 
     selected_species = st.sidebar.multiselect(
-        "Select Species",
-        options=species
+        "🐦 Select Bird Species",
+        species_list,
+        default=species_list
     )
 
-else:
-    selected_species = []
-
-
-# Season filter
-if "Season" in df.columns:
-
-    seasons = [
-        "Spring",
-        "Summer",
-        "Autumn",
-        "Winter"
-    ]
-
-    selected_seasons = st.sidebar.multiselect(
-        "Select Season",
-        options=seasons,
-        default=seasons
-    )
-
-else:
-    selected_seasons = []
-
-
-# ============================================================
-# APPLY FILTERS
-# ============================================================
-
-filtered_df = df.copy()
-
-
-if "Year" in filtered_df.columns and selected_years:
     filtered_df = filtered_df[
-        filtered_df["Year"].isin(selected_years)
-    ]
-
-
-if "Location_Type" in filtered_df.columns and selected_habitats:
-    filtered_df = filtered_df[
-        filtered_df["Location_Type"].isin(selected_habitats)
-    ]
-
-
-if "Common_Name" in filtered_df.columns and selected_species:
-    filtered_df = filtered_df[
-        filtered_df["Common_Name"].isin(selected_species)
-    ]
-
-
-if "Season" in filtered_df.columns and selected_seasons:
-    filtered_df = filtered_df[
-        filtered_df["Season"].isin(selected_seasons)
-    ]
-
-
-# ============================================================
-# KPI CALCULATIONS
-# ============================================================
-
-total_observations = len(filtered_df)
-
-if "Scientific_Name" in filtered_df.columns:
-    unique_species = filtered_df["Scientific_Name"].nunique()
-else:
-    unique_species = 0
-
-
-if "Site_Name" in filtered_df.columns:
-    observation_sites = filtered_df["Site_Name"].nunique()
-else:
-    observation_sites = 0
-
-
-if "Admin_Unit_Code" in filtered_df.columns:
-    admin_units = filtered_df["Admin_Unit_Code"].nunique()
-else:
-    admin_units = 0
-
-
-# Watchlist species
-watchlist_species = 0
-
-if "PIF_Watchlist_Status" in filtered_df.columns:
-
-    watchlist = filtered_df[
-        filtered_df["PIF_Watchlist_Status"]
+        filtered_df["Common_Name"]
         .astype(str)
-        .str.upper()
-        .isin(["TRUE", "YES", "1"])
+        .isin(selected_species)
     ]
 
-    if "Scientific_Name" in watchlist.columns:
-        watchlist_species = watchlist[
-            "Scientific_Name"
-        ].nunique()
+# ---------------------------------------------------------
+# Site Filter
+# ---------------------------------------------------------
 
+if "Site_Name" in df.columns:
 
-# ============================================================
+    site_list = sorted(
+        df["Site_Name"]
+        .dropna()
+        .astype(str)
+        .unique()
+    )
+
+    selected_sites = st.sidebar.multiselect(
+        "📍 Select Site",
+        site_list,
+        default=site_list
+    )
+
+    filtered_df = filtered_df[
+        filtered_df["Site_Name"]
+        .astype(str)
+        .isin(selected_sites)
+    ]
+
+# ---------------------------------------------------------
+# Year Filter
+# ---------------------------------------------------------
+
+if "Year" in df.columns:
+
+    year_values = sorted(
+        df["Year"]
+        .dropna()
+        .unique()
+    )
+
+    if len(year_values) > 0:
+
+        selected_years = st.sidebar.multiselect(
+            "📅 Select Year",
+            year_values,
+            default=year_values
+        )
+
+        filtered_df = filtered_df[
+            filtered_df["Year"]
+            .isin(selected_years)
+        ]
+
+# =========================================================
 # KPI CARDS
-# ============================================================
+# =========================================================
 
 st.subheader("📊 Key Performance Indicators")
 
-col1, col2, col3, col4, col5 = st.columns(5)
+# Total records
+total_observations = len(filtered_df)
+
+# Total bird count
+if "Initial_Three_Min_Cnt" in filtered_df.columns:
+
+    total_birds = int(
+        filtered_df["Initial_Three_Min_Cnt"]
+        .sum()
+    )
+
+else:
+    total_birds = 0
+
+# Total species
+if "Common_Name" in filtered_df.columns:
+
+    total_species = (
+        filtered_df["Common_Name"]
+        .nunique()
+    )
+
+else:
+    total_species = 0
+
+# Total sites
+if "Site_Name" in filtered_df.columns:
+
+    total_sites = (
+        filtered_df["Site_Name"]
+        .nunique()
+    )
+
+else:
+    total_sites = 0
+
+
+col1, col2, col3, col4 = st.columns(4)
 
 with col1:
+
     st.metric(
-        "Total Observations",
+        "Observation Records",
         f"{total_observations:,}"
     )
 
 with col2:
+
     st.metric(
-        "Unique Species",
-        f"{unique_species:,}"
+        "Total Birds Observed",
+        f"{total_birds:,}"
     )
 
 with col3:
+
     st.metric(
-        "Observation Sites",
-        f"{observation_sites:,}"
+        "Bird Species",
+        f"{total_species:,}"
     )
 
 with col4:
+
     st.metric(
-        "Administrative Units",
-        f"{admin_units:,}"
+        "Observation Sites",
+        f"{total_sites:,}"
     )
 
-with col5:
-    st.metric(
-        "Watchlist Species",
-        f"{watchlist_species:,}"
-    )
+# =========================================================
+# CHART 1 - TOP BIRD SPECIES
+# =========================================================
 
-
-st.divider()
-
-
-# ============================================================
-# CHART 1 - OBSERVATIONS BY YEAR
-# ============================================================
-
-st.subheader("📅 Bird Observations by Year")
-
-if "Year" in filtered_df.columns:
-
-    yearly_data = (
-        filtered_df
-        .groupby("Year")
-        .size()
-        .reset_index(name="Observations")
-        .sort_values("Year")
-    )
-
-    fig_year = px.line(
-        yearly_data,
-        x="Year",
-        y="Observations",
-        markers=True,
-        title="Observation Trend by Year"
-    )
-
-    fig_year.update_layout(
-        xaxis_title="Year",
-        yaxis_title="Number of Observations"
-    )
-
-    st.plotly_chart(
-        fig_year,
-        use_container_width=True
-    )
-
-
-# ============================================================
-# CHART 2 - HABITAT
-# ============================================================
-
-col1, col2 = st.columns(2)
-
-with col1:
-
-    st.subheader("🌳 Species by Habitat")
-
-    if (
-        "Location_Type" in filtered_df.columns
-        and "Scientific_Name" in filtered_df.columns
-    ):
-
-        habitat_data = (
-            filtered_df
-            .groupby("Location_Type")["Scientific_Name"]
-            .nunique()
-            .reset_index(name="Species")
-            .sort_values("Species", ascending=False)
-        )
-
-        fig_habitat = px.bar(
-            habitat_data,
-            x="Location_Type",
-            y="Species",
-            title="Unique Species by Habitat"
-        )
-
-        st.plotly_chart(
-            fig_habitat,
-            use_container_width=True
-        )
-
-
-# ============================================================
-# CHART 3 - TOP SPECIES
-# ============================================================
-
-with col2:
-
-    st.subheader("🐦 Top 10 Bird Species")
-
-    if "Common_Name" in filtered_df.columns:
-
-        top_species = (
-            filtered_df["Common_Name"]
-            .value_counts()
-            .head(10)
-            .reset_index()
-        )
-
-        top_species.columns = [
-            "Common_Name",
-            "Observations"
-        ]
-
-        fig_species = px.bar(
-            top_species,
-            x="Observations",
-            y="Common_Name",
-            orientation="h",
-            title="Top 10 Most Observed Species"
-        )
-
-        fig_species.update_layout(
-            yaxis=dict(
-                categoryorder="total ascending"
-            )
-        )
-
-        st.plotly_chart(
-            fig_species,
-            use_container_width=True
-        )
-
-
-# ============================================================
-# CHART 4 - SEASON
-# ============================================================
-
-col1, col2 = st.columns(2)
-
-with col1:
-
-    st.subheader("🌦️ Observations by Season")
-
-    if "Season" in filtered_df.columns:
-
-        season_data = (
-            filtered_df["Season"]
-            .value_counts()
-            .reindex(
-                [
-                    "Spring",
-                    "Summer",
-                    "Autumn",
-                    "Winter"
-                ],
-                fill_value=0
-            )
-            .reset_index()
-        )
-
-        season_data.columns = [
-            "Season",
-            "Observations"
-        ]
-
-        fig_season = px.bar(
-            season_data,
-            x="Season",
-            y="Observations",
-            title="Bird Activity by Season"
-        )
-
-        st.plotly_chart(
-            fig_season,
-            use_container_width=True
-        )
-
-
-# ============================================================
-# CHART 5 - IDENTIFICATION METHOD
-# ============================================================
-
-with col2:
-
-    st.subheader("🔊 Identification Method")
-
-    if "ID_Method" in filtered_df.columns:
-
-        method_data = (
-            filtered_df["ID_Method"]
-            .value_counts()
-            .head(10)
-            .reset_index()
-        )
-
-        method_data.columns = [
-            "ID_Method",
-            "Observations"
-        ]
-
-        fig_method = px.pie(
-            method_data,
-            names="ID_Method",
-            values="Observations",
-            title="Bird Identification Methods"
-        )
-
-        st.plotly_chart(
-            fig_method,
-            use_container_width=True
-        )
-
-
-# ============================================================
-# CHART 6 - TEMPERATURE VS BIRD COUNT
-# ============================================================
-
-st.subheader("🌡️ Temperature vs Bird Activity")
+st.subheader("🐦 Top Bird Species")
 
 if (
-    "Temperature" in filtered_df.columns
+    "Common_Name" in filtered_df.columns
     and "Initial_Three_Min_Cnt" in filtered_df.columns
 ):
 
-    temperature_df = filtered_df[
-        [
-            "Temperature",
+    species_counts = (
+        filtered_df
+        .groupby("Common_Name")["Initial_Three_Min_Cnt"]
+        .sum()
+        .sort_values(ascending=False)
+        .head(10)
+    )
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    species_counts.plot(
+        kind="bar",
+        ax=ax
+    )
+
+    ax.set_title(
+        "Top 10 Bird Species by Number Observed"
+    )
+
+    ax.set_xlabel("Bird Species")
+    ax.set_ylabel("Bird Count")
+
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+
+    st.pyplot(fig)
+
+# =========================================================
+# CHART 2 - BIRDS BY SITE
+# =========================================================
+
+st.subheader("📍 Bird Observations by Site")
+
+if (
+    "Site_Name" in filtered_df.columns
+    and "Initial_Three_Min_Cnt" in filtered_df.columns
+):
+
+    site_counts = (
+        filtered_df
+        .groupby("Site_Name")["Initial_Three_Min_Cnt"]
+        .sum()
+        .sort_values(ascending=False)
+        .head(10)
+    )
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    site_counts.plot(
+        kind="bar",
+        ax=ax
+    )
+
+    ax.set_title(
+        "Top 10 Observation Sites"
+    )
+
+    ax.set_xlabel("Site")
+    ax.set_ylabel("Bird Count")
+
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+
+    st.pyplot(fig)
+
+# =========================================================
+# CHART 3 - MONTHLY TREND
+# =========================================================
+
+st.subheader("📈 Monthly Bird Observation Trend")
+
+if (
+    "Date" in filtered_df.columns
+    and "Initial_Three_Min_Cnt" in filtered_df.columns
+):
+
+    trend_df = filtered_df.copy()
+
+    trend_df = trend_df.dropna(
+        subset=["Date"]
+    )
+
+    trend_df["Month"] = (
+        trend_df["Date"]
+        .dt.to_period("M")
+        .astype(str)
+    )
+
+    monthly_trend = (
+        trend_df
+        .groupby("Month")["Initial_Three_Min_Cnt"]
+        .sum()
+    )
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    monthly_trend.plot(
+        kind="line",
+        marker="o",
+        ax=ax
+    )
+
+    ax.set_title(
+        "Monthly Bird Observation Trend"
+    )
+
+    ax.set_xlabel("Month")
+    ax.set_ylabel("Bird Count")
+
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+
+    st.pyplot(fig)
+
+# =========================================================
+# CHART 4 - LOCATION TYPE
+# =========================================================
+
+st.subheader("🌳 Birds by Location Type")
+
+if (
+    "Location_Type" in filtered_df.columns
+    and "Initial_Three_Min_Cnt" in filtered_df.columns
+):
+
+    habitat_counts = (
+        filtered_df
+        .groupby("Location_Type")[
             "Initial_Three_Min_Cnt"
         ]
-    ].dropna()
-
-    fig_temp = px.scatter(
-        temperature_df,
-        x="Temperature",
-        y="Initial_Three_Min_Cnt",
-        title="Temperature vs Initial Three-Minute Bird Count",
-        opacity=0.6
+        .sum()
+        .sort_values(ascending=False)
     )
 
-    fig_temp.update_layout(
-        xaxis_title="Temperature",
-        yaxis_title="Bird Count"
+    fig, ax = plt.subplots(figsize=(9, 5))
+
+    habitat_counts.plot(
+        kind="bar",
+        ax=ax
     )
 
-    st.plotly_chart(
-        fig_temp,
-        use_container_width=True
+    ax.set_title(
+        "Bird Observations by Location Type"
     )
 
+    ax.set_xlabel("Location Type")
+    ax.set_ylabel("Bird Count")
 
-# ============================================================
-# CONSERVATION SECTION
-# ============================================================
+    plt.xticks(rotation=45)
+    plt.tight_layout()
 
-st.divider()
+    st.pyplot(fig)
 
-st.subheader("🛡️ Conservation Insights")
+# =========================================================
+# CHART 5 - TOP SPECIES DISTRIBUTION
+# =========================================================
 
-col1, col2 = st.columns(2)
+st.subheader("🥧 Species Distribution")
 
+if (
+    "Common_Name" in filtered_df.columns
+    and "Initial_Three_Min_Cnt" in filtered_df.columns
+):
 
-with col1:
-
-    if "PIF_Watchlist_Status" in filtered_df.columns:
-
-        watchlist_counts = (
-            filtered_df["PIF_Watchlist_Status"]
-            .astype(str)
-            .value_counts()
-            .reset_index()
-        )
-
-        watchlist_counts.columns = [
-            "Status",
-            "Observations"
+    distribution = (
+        filtered_df
+        .groupby("Common_Name")[
+            "Initial_Three_Min_Cnt"
         ]
+        .sum()
+        .sort_values(ascending=False)
+        .head(5)
+    )
 
-        fig_watchlist = px.pie(
-            watchlist_counts,
-            names="Status",
-            values="Observations",
-            title="PIF Watchlist Status"
-        )
+    fig, ax = plt.subplots(
+        figsize=(7, 7)
+    )
 
-        st.plotly_chart(
-            fig_watchlist,
-            use_container_width=True
-        )
+    distribution.plot(
+        kind="pie",
+        autopct="%1.1f%%",
+        ax=ax
+    )
 
+    ax.set_ylabel("")
 
-with col2:
+    ax.set_title(
+        "Top 5 Species Distribution"
+    )
 
-    if "Regional_Stewardship_Status" in filtered_df.columns:
+    st.pyplot(fig)
 
-        stewardship_counts = (
-            filtered_df[
-                "Regional_Stewardship_Status"
+# =========================================================
+# BUSINESS / ANALYTICAL RECOMMENDATIONS
+# =========================================================
+
+st.subheader("💡 Business Recommendations")
+
+if len(filtered_df) > 0:
+
+    # -----------------------------------------------------
+    # Top Species
+    # -----------------------------------------------------
+
+    if (
+        "Common_Name" in filtered_df.columns
+        and "Initial_Three_Min_Cnt" in filtered_df.columns
+    ):
+
+        species_summary = (
+            filtered_df
+            .groupby("Common_Name")[
+                "Initial_Three_Min_Cnt"
             ]
-            .astype(str)
-            .value_counts()
-            .reset_index()
+            .sum()
+            .sort_values(ascending=False)
         )
 
-        stewardship_counts.columns = [
-            "Status",
-            "Observations"
-        ]
+        if len(species_summary) > 0:
 
-        fig_stewardship = px.pie(
-            stewardship_counts,
-            names="Status",
-            values="Observations",
-            title="Regional Stewardship Status"
+            top_species = species_summary.index[0]
+            top_species_count = species_summary.iloc[0]
+
+            st.write(
+                f"🔹 **Prioritize monitoring of {top_species}**, "
+                f"which has the highest recorded bird count "
+                f"of **{int(top_species_count):,}**."
+            )
+
+    # -----------------------------------------------------
+    # Top Site
+    # -----------------------------------------------------
+
+    if (
+        "Site_Name" in filtered_df.columns
+        and "Initial_Three_Min_Cnt" in filtered_df.columns
+    ):
+
+        site_summary = (
+            filtered_df
+            .groupby("Site_Name")[
+                "Initial_Three_Min_Cnt"
+            ]
+            .sum()
+            .sort_values(ascending=False)
         )
 
-        st.plotly_chart(
-            fig_stewardship,
-            use_container_width=True
-        )
+        if len(site_summary) > 0:
 
+            top_site = site_summary.index[0]
 
-# ============================================================
-# DATA PREVIEW
-# ============================================================
+            st.write(
+                f"🔹 **Prioritize conservation activities "
+                f"at {top_site}**, where bird observations "
+                f"are highest."
+            )
 
-st.divider()
+    # -----------------------------------------------------
+    # Species Diversity
+    # -----------------------------------------------------
 
-st.subheader("📋 Filtered Dataset")
+    st.write(
+        f"🔹 The selected data contains "
+        f"**{total_species:,} different bird species**. "
+        f"Areas with high species diversity should receive "
+        f"greater conservation attention."
+    )
+
+    # -----------------------------------------------------
+    # Monitoring
+    # -----------------------------------------------------
+
+    st.write(
+        "🔹 Conduct additional surveys at sites with "
+        "lower observation counts to understand whether "
+        "the difference is caused by habitat conditions "
+        "or monitoring frequency."
+    )
+
+    # -----------------------------------------------------
+    # Seasonal Monitoring
+    # -----------------------------------------------------
+
+    st.write(
+        "🔹 Use monthly observation trends to identify "
+        "periods of higher bird activity and plan field "
+        "monitoring accordingly."
+    )
+
+    # -----------------------------------------------------
+    # Data Quality
+    # -----------------------------------------------------
+
+    st.write(
+        "🔹 Maintain consistent records for species, "
+        "site, date, weather conditions and bird counts "
+        "to improve future biodiversity analysis."
+    )
+
+else:
+
+    st.warning(
+        "No data available for the selected filters."
+    )
+
+# =========================================================
+# CONCLUSION
+# =========================================================
+
+st.subheader("📌 Conclusion")
 
 st.write(
-    f"Showing {len(filtered_df):,} observations"
-)
+    """
+    The Bird Species Observation Analysis Dashboard provides
+    a comprehensive view of bird observations across different
+    species, sites and location types. KPI cards summarize the
+    total observation records, total birds observed, species
+    diversity and observation sites.
 
-st.dataframe(
-    filtered_df,
-    use_container_width=True
+    The charts help identify the most frequently observed
+    species, important observation sites, monthly trends and
+    location types with higher bird activity.
+
+    These insights can support biodiversity monitoring,
+    conservation planning, habitat management and efficient
+    allocation of field-survey resources.
+    """
 )
