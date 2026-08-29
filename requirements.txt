@@ -1,4 +1,6 @@
 streamlit
+python
 pandas
 matplotlib
 numpy
+jupyter
